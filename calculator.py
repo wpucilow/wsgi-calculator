@@ -40,16 +40,47 @@ To submit your homework:
 
 
 """
+from functools import reduce
 
+def resp_body(msg):
+  lines = msg.split('\n')
+  body = ""
+  for line in lines:
+    body += f"{line}<br />"
+  print(body)
+  return body
 
 def add(*args):
     """ Returns a STRING with the sum of the arguments """
 
     # TODO: Fill sum with the correct value, based on the
     # args provided.
-    sum = "0"
+    result = sum(args)
+    return str(result)
 
-    return sum
+def multiply(*args):
+    result = reduce((lambda x,y: x*y), args)
+    return str(result)
+
+def divide(*args):
+    result = reduce((lambda x,y: x/y), args)
+    return str(result)
+
+def subtract(*args):
+  result = reduce((lambda x,y: x-y), args)
+  return str(result)
+
+def calc(*args):
+  welcome = """
+  Welcom to calculator
+  usage http://localhost:8080/<func>/arg1/arg2/../argN
+  where "func" is one of the following:
+    add,
+    subtract.
+    multiply,
+    divide
+  """
+  return welcome
 
 # TODO: Add functions for handling more arithmetic operations.
 
@@ -58,13 +89,38 @@ def resolve_path(path):
     Should return two values: a callable and an iterable of
     arguments.
     """
+    funcs = {
+        '': calc,
+        'add': add,
+        'multiply': multiply,
+        'subtract': subtract,
+        'divide': divide,
+    }
 
     # TODO: Provide correct values for func and args. The
     # examples provide the correct *syntax*, but you should
     # determine the actual values of func and args using the
     # path.
-    func = add
-    args = ['25', '32']
+    path = path.strip('/').split('/')
+    func_name = path[0]
+    args = path[1:]
+
+    # func = add
+    # args = ['25', '32']
+    print(f">>>> {func_name}, {args}")
+
+    if func_name not in funcs:
+      raise NameError
+    elif (func_name != '') & (len(args) < 2):
+      raise ValueError("required at least 2 operans")
+    try:
+      func = funcs[func_name]
+    except KeyError as e:
+      raise NameError
+    try:
+      args = list(map(int, args))
+    except ValueError:
+      raise ValueError("all arguments must be integers")
 
     return func, args
 
@@ -76,9 +132,61 @@ def application(environ, start_response):
     #
     # TODO (bonus): Add error handling for a user attempting
     # to divide by zero.
-    pass
+    print(f"+++ route: {environ['PATH_INFO']}")
+    headers = [("Content-type", "text/html")]
+    try:
+      path = environ.get('PATH_INFO', None)
+      if path is None:
+          raise NameError
+      func, args = resolve_path(path)
+      print(f"+++ func: {func}, args: {args}")
+      # body = func(*args)
+      body = resp_body(func(*args))
+      status = "200 OK"
+    except ZeroDivisionError:
+      status = "400 Bad Request"
+      body = "<h1>Error code: 400</h1>"
+      body += ""
+      # body += "<h1>Division by Zero</h1>"
+      body += "<h1 style=\"{}\">Division by Zero</h1>".format("color:red;")
+    except NameError:
+      status = "404 Not Found"
+      body = body = "<h1>Error code: 404</h1>"
+      body += ""
+      # body += "<h1>Not Found</h1>"
+      body += "<h1 style=\"{}\">Not Found</h1>".format("color:red;")
+    except ValueError as e:
+      status = "500 Internal Server Error"
+      body = "<h1>Error code: 500</h1>"
+      body += ""
+      # body += f"<h1>{str(e)}</h1>"
+      body += "<h1 style=\"{}\">{}</h1>".format("color:red;", str(e))
+
+    except Exception as e:
+      status = "500 Internal Server Error"
+      body = body = "<h1>Error code: 500</h1>"
+      body += "<h1>Internal Server Error</h1>"
+      body += ""
+      body += f"<h1 style=\"color:red;\">{str(e)}</h1>"
+      print(traceback.format_exc())
+    finally:
+      headers.append(('Content-length', str(len(body))))
+      start_response(status, headers)
+      return [body.encode('utf8')]
+
+    # status = "200 OK"
+    # body = "tra la la"
+    # func, args = resolve_path(path)
+    # body = func(*args)
+    # headers.append(('Content-length', str(len(body))))
+    # start_response(status, headers)
+    # return [body.encode('utf8')]
+
 
 if __name__ == '__main__':
     # TODO: Insert the same boilerplate wsgiref simple
     # server creation that you used in the book database.
-    pass
+    from wsgiref.simple_server import make_server
+    srv = make_server('localhost', 8080, application)
+    srv.serve_forever()
+    
